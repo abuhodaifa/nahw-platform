@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>لوحة التحكم - منصة النحو</title>
+    <style>
+        body { font-family: Cairo, sans-serif; background-color: #f4f7f6; padding: 20px; color: #333; }
+        .container { max-width: 1200px; margin: auto; }
+        h1, h2 { color: #00695c; }
+        .grid-container { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
+        .section { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+        .full-width { grid-column: 1 / -1; }
+        input, textarea, select { width: calc(100% - 20px); padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; font-family: Cairo, sans-serif; }
+        button { padding: 10px 15px; background-color: #00695c; color: white; border: none; cursor: pointer; border-radius: 5px; font-family: Cairo, sans-serif; transition: background-color 0.2s; }
+        button:hover { background-color: #004d40; }
+        .delete-btn { background-color: #c62828; }
+        .delete-btn:hover { background-color: #a91f1f; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { padding: 12px; border: 1px solid #ddd; text-align: right; }
+        th { background-color: #f2f2f2; }
+        td:last-child { width: 80px; text-align: center; }
+
+        @media (max-width: 900px) {
+            .grid-container { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>لوحة التحكم الشاملة</h1>
+        
+        <div class="grid-container">
+            <!-- قسم إدارة الدروس -->
+            <section class="section">
+                <h2><i class="fas fa-book-reader"></i> إدارة الدروس</h2>
+                <form id="lesson-form">
+                    <input type="text" name="title" placeholder="عنوان الدرس" required>
+                    <textarea name="content" placeholder="محتوى الدرس..." rows="4" required></textarea>
+                    <button type="submit">إضافة درس</button>
+                </form>
+                <table id="lessons-table">
+                    <thead><tr><th>الدرس</th><th>إجراء</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </section>
+
+            <!-- قسم إدارة الصوتيات -->
+            <section class="section">
+                <h2><i class="fas fa-headphones-alt"></i> إدارة الصوتيات</h2>
+                <form id="audio-form">
+                    <input type="text" name="title" placeholder="عنوان المقطع" required>
+                    <input type="text" name="duration" placeholder="مدة المقطع (مثال: 15:30)">
+                    <label for="audioFile">اختر ملف الصوت:</label><input type="file" name="audioFile" id="audioFile" accept="audio/*" required>
+                    <button type="submit">إضافة مقطع صوتي</button>
+                </form>
+                <table id="audios-table">
+                    <thead><tr><th>المقطع الصوتي</th><th>إجراء</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </section>
+
+            <!-- قسم إدارة الأسئلة (كامل العرض) -->
+            <section class="section full-width">
+                <h2><i class="fas fa-question-circle"></i> إدارة الأسئلة</h2>
+                <form id="question-form">
+                    <textarea name="statement" placeholder="نص السؤال" rows="3" required></textarea>
+                    <select name="answer" required>
+                        <option value="">-- اختر الإجابة الصحيحة --</option>
+                        <option value="correct">صَحٌّ</option>
+                        <option value="incorrect">خَطَأٌ</option>
+                    </select>
+                    <textarea name="correction" placeholder="التصويب" rows="2"></textarea>
+                    <input type="text" name="simplifiedStatement" placeholder="السؤال المبسط (اختياري)">
+                    <input type="text" name="hint" placeholder="التلميح (اختياري)">
+                    <button type="submit">إضافة سؤال</button>
+                </form>
+                <table id="questions-table">
+                    <thead><tr><th>السؤال</th><th>الإجابة</th><th>إجراء</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </section>
+        </div>
+    </div>
+
+    <script>
+       
+    document.addEventListener('DOMContentLoaded', () => {
+        // --- إعداد العناصر الرئيسية ---
+        const qForm = document.getElementById('question-form');
+        const qTable = document.querySelector('#questions-table tbody');
+        const lForm = document.getElementById('lesson-form');
+        const lTable = document.querySelector('#lessons-table tbody');
+        const aForm = document.getElementById('audio-form');
+        const aTable = document.querySelector('#audios-table tbody');
+
+        // --- دوال عامة ---
+
+        // دالة لجلب البيانات وعرضها
+        async function fetchAndDisplay(endpoint, tableBody, rowTemplate) {
+            try {
+                const response = await fetch(endpoint);
+                const { data } = await response.json();
+                tableBody.innerHTML = '';
+                if (data) {
+                    data.forEach(item => {
+                        tableBody.innerHTML += rowTemplate(item);
+                    });
+                }
+            } catch (error) {
+                console.error(`خطأ في جلب ${endpoint}:`, error);
+                tableBody.innerHTML = `<tr><td colspan="100%">فشل تحميل البيانات.</td></tr>`;
+            }
+        }
+
+        // دالة للتعامل مع حذف البيانات
+        function handleDelete(tableBody, endpoint, callback) {
+            tableBody.addEventListener('click', async (e) => {
+                if (e.target.classList.contains('delete-btn')) {
+                    const id = e.target.dataset.id;
+                    if (confirm('هل أنت متأكد من الحذف؟')) {
+                        try {
+                            await fetch(`${endpoint}/${id}`, { method: 'DELETE' });
+                            callback();
+                        } catch (error) {
+                            console.error('خطأ في الحذف:', error);
+                            alert('فشل حذف العنصر.');
+                        }
+                    }
+                }
+            });
+        }
+        
+        // --- إعداد قوالب عرض البيانات لكل قسم ---
+        const qRow = q => `<tr><td>${q.statement.slice(0, 80)}...</td><td>${q.answer === 'correct' ? 'صح' : 'خطأ'}</td><td><button class="delete-btn" data-id="${q.id}">حذف</button></td></tr>`;
+        const refreshQuestions = () => fetchAndDisplay('/api/questions', qTable, qRow);
+        
+        const lRow = l => `<tr><td>${l.title}</td><td><button class="delete-btn" data-id="${l.id}">حذف</button></td></tr>`;
+        const refreshLessons = () => fetchAndDisplay('/api/lessons', lTable, lRow);
+
+        const aRow = a => `<tr><td>${a.title}</td><td><button class="delete-btn" data-id="${a.id}">حذف</button></td></tr>`;
+        const refreshAudios = () => fetchAndDisplay('/api/audios', aTable, aRow);
+
+        // --- ربط أحداث النماذج ---
+
+        // 1. إضافة سؤال (يرسل بيانات JSON)
+        qForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(qForm);
+            const data = Object.fromEntries(formData.entries());
+            await fetch('/api/questions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            qForm.reset();
+            refreshQuestions();
+        });
+
+        // 2. إضافة درس (يرسل بيانات JSON)
+        lForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(lForm);
+            const data = Object.fromEntries(formData.entries());
+            await fetch('/api/lessons', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            lForm.reset();
+            refreshLessons();
+        });
+        
+        // 3. **إضافة صوتي (يرسل FormData لرفع الملف)**
+        aForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(aForm); // نستخدم FormData مباشرة
+            
+            try {
+                const response = await fetch('/api/audios', {
+                    method: 'POST',
+                    body: formData // **مهم:** لا نحدد Content-Type هنا
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'فشل رفع الملف');
+                }
+
+                aForm.reset();
+                refreshAudios();
+
+            } catch (error) {
+                console.error("خطأ في رفع الملف الصوتي:", error);
+                alert(`حدث خطأ: ${error.message}`);
+            }
+        });
+
+        // --- ربط أحداث الحذف ---
+        handleDelete(qTable, '/api/questions', refreshQuestions);
+        handleDelete(lTable, '/api/lessons', refreshLessons);
+        handleDelete(aTable, '/api/audios', refreshAudios);
+
+        // --- جلب كل البيانات عند تحميل الصفحة ---
+        refreshQuestions();
+        refreshLessons();
+        refreshAudios();
+    });
+</script>
+</body>
+</html>
